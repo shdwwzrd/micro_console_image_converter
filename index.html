@@ -755,7 +755,7 @@
 						combo_frame[frameCounter] += "),\n(";
 					}
 					for(var page = 0; page < pageCount; page++) {
-						if(combo_frame[frameCounter] == 'undefined'){
+						if(len(combo_frame[frameCounter]) == 0){
 							combo_frame[frameCounter] = "";
 						}
 						// Read the page column-by-column for white pixels first
@@ -778,9 +778,7 @@
 							if(digitSpriteStr.length == 1) {
 								digitSpriteStr = "0" + digitSpriteStr;
 							}
-							if(digitSpriteStr != 'undefined'){
-                                combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
-							}
+							combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
 							if(currentByte%imgNW == Math.ceil(imgNW/2)-1){
 								combo_frame[frameCounter] += "\n";
 							}
@@ -789,7 +787,7 @@
 									combo_frame[frameCounter] += "\n";
 								}
 								frameCounter++;
-								if(combo_frame[frameCounter] == 'undefined'){
+								if(len(combo_frame[frameCounter]) == 0){
 									combo_frame[frameCounter] = "";
 								}
 								var frameNumber = frameCounter.toString().length === 1 ? "0"+frameCounter.toString() : frameCounter.toString();

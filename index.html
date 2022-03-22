@@ -698,9 +698,9 @@
 					}
 				}
 			}else{//thumby transparent, thumby B&W
-				if(device==7 && totalFrames>1){
-					comboString+="invalid images, thumby black & white images can not have frames";
-				}else{
+				//if(device==7 && totalFrames>1){
+					//comboString+="invalid images, thumby black & white images can not have frames";
+				//}else{
 					frameCounter=0;
 					combo_frame = new Array();
 					combo_frame[0] = "";
@@ -806,7 +806,7 @@
 						comboString+=combo_frame[i];
 						console.log(combo_frame[i]);
 					}
-				}
+				//}
 			}
 			
 			if(device==6 || device==7){//thumby

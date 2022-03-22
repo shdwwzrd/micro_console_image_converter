@@ -778,7 +778,9 @@
 							if(digitSpriteStr.length == 1) {
 								digitSpriteStr = "0" + digitSpriteStr;
 							}
-							combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
+							if(digitSpriteStr != 'undefined'){
+                                combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
+							}
 							if(currentByte%imgNW == Math.ceil(imgNW/2)-1){
 								combo_frame[frameCounter] += "\n";
 							}

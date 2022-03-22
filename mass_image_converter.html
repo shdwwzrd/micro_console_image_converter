@@ -1,0 +1,835 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Mass Image Converter</title>
+	<meta name="viewport" content="width=750" />
+	<link rel="stylesheet" type="text/css" href="css/textstyles.css" />
+	<link rel="stylesheet" type="text/css" href="css/pagestyle.css?3.568126e+9" />
+	<script type="text/javascript" src="imageCode.js"></script>
+	<script type="text/javascript" src="LZWEncoder.js"></script>
+	<script type="text/javascript" src="NeuQuant.js"></script>
+	<script type="text/javascript" src="GIFEncoder.js"></script>
+	<script type="text/javascript" src="b64.js"></script>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>  
+	<style type="text/css">
+	div.container {min-height: 1070px;}.shape_18 {background: url('images/shape_18.png') no-repeat;}@media only screen and (-moz-min-device-pixel-ratio: 1.5), only screen and (-o-min-device-pixel-ratio: 3/2), only screen and (-webkit-min-device-pixel-ratio: 1.5), only screen and (min-devicepixel-ratio: 1.5), only screen and (min-resolution: 1.5dppx) {.shape_18 {background: url('images/shape_18@2x.png') no-repeat;background-size: 702px 162px;}}
+	canvas,
+	img {
+		image-rendering: crisp-edges;
+		image-rendering: -moz-crisp-edges;
+		image-rendering: -webkit-optimize-contrast;
+		image-rendering: optimize-contrast;
+		image-rendering: pixelated;
+		-ms-interpolation-mode: nearest-neighbor;
+	}
+	textarea{
+		resize:none;
+		width: 698px;
+		padding:0px;
+		background-color: #FEFEFC;
+		border: 1px solid #463C3C;
+		white-space: pre;
+	}
+	.txtHead{
+		text-align: left;
+		margin: 16px 0 0 0;
+	}
+	</style>
+</head>
+<body style="font-family: Courier New; text-align: center;">
+	Mass Image Converter<br>
+	Device:
+	<input type="radio" name="device" id="device" value="0" checked> Gamebuino Meta
+	<input type="radio" name="device" id="device" value="1"> Pokitto
+	<input type="radio" name="device" id="device" value="2"> Tiny/Pocket Arcade
+	<input type="radio" name="device" id="device" value="5"> PocketStar<br>
+	<input type="radio" name="device" id="device" value="3"> Arduboy Black/White/Transparent only<br>
+	<input type="radio" name="device" id="device" value="4"> Arduboy Black/White only<br>
+	<input type="radio" name="device" id="device" value="6"> Thumby Black/White/Transparent (drawMaskedSprite)<br>
+	<input type="radio" name="device" id="device" value="7"> Thumby Black/White (drawSprite)<br>
+	Palette:<input type='file' id='palettefile'> Default:Pico 8 Palette<br>
+	Format:
+	<input type="radio" name="format" id="format" value="0"> 2 Bytes per Pixel (65536 colors)
+	<input type="radio" name="format" id="format" value="1"> 1 Byte per Pixel (256 colors)<br>
+	Format: Indexed<input type="radio" name="format" id="format" value="2" checked> 2 Pixels per Byte (16 colors)
+	<input type="radio" name="format" id="format" value="4"> 4 Pixels per Byte (4 Colors)
+	<input type="radio" name="format" id="format" value="8"> 8 Pixels per Byte (2 Colors)<br>
+	ImageSets:<input type='file' id='imagefiles' multiple> 
+	<div class="shadow">
+		<div class="container" style="height:1070px">
+			<div class="content" data-minheight="100vh">
+				<div style="position:relative">
+					<div class="shape_19" style="left:25px;top:34px;width:100%;height:160px;z-index:17;position:absolute;">
+						<div style="margin: 4.32px 2.16px 4.32px 2.16px; " id='image-container'>
+
+						</div>
+					</div>
+				</div>
+			</div>
+
+		</div>
+	</div>
+	
+	<script language="JavaScript">
+	var device = 0;//Meta
+	var format = 2;//16 colors indexed 16bit
+	var colors = 16;
+	$("input[name='device']").click(function() {
+		//alot of coding here to change the map into a sectional map and all chunks for this map
+		device = parseInt(this.value);
+		UpdateImageOutput();
+	});
+	$("input[name='format']").click(function() {
+		//alot of coding here to change the map into a sectional map and all chunks for this map
+		format = parseInt(this.value);
+		UpdateImageOutput();
+	});
+	
+			
+	var colorPalette = new Array();
+	var rgbPalette = new Array();
+	var comboString;
+	var customPalette=false;
+	
+	var palettefile = document.getElementById('palettefile'); // the input element of type file
+	palettefile.onchange = function(e) {
+		var reader = new FileReader();
+		reader.onload = function(event) {
+			event.preventDefault;
+			// Create image element
+			var paletteImage = new Image();
+			paletteImage.src = event.target.result;
+			setTimeout(function(){
+				customPalette=true;
+				var imgNW = paletteImage.naturalWidth;
+				var imgNH = paletteImage.naturalHeight;
+				if(imgNH>1){alert("invalid palette");exit();}
+				var invisPaletteImageCanvas = document.createElement("canvas");
+				invisPaletteImageCanvas.width = imgNW;
+				invisPaletteImageCanvas.height = imgNH;
+				invisPaletteImageCanvas.style.display = "none";
+				
+				// Create div container
+				var droppedPaletteImageDiv = document.createElement("div");
+				droppedPaletteImageDiv.className = "image-view";
+				droppedPaletteImageDiv.appendChild(invisPaletteImageCanvas);
+
+				// Create context for drawing
+				var invisPaletteImageContext = invisPaletteImageCanvas.getContext("2d");
+
+				// Draw the image on an invisible canvas to generate the code
+				invisPaletteImageContext.drawImage(paletteImage, 0, 0);
+				
+				//populate the rgbPalette
+				rgbPalette = new Array();
+				for(var id = 0; id < imgNW; id++) {
+					var pixelColor = invisPaletteImageContext.getImageData(id, 0, 1, 1).data;	
+					console.log(pixelColor);
+					rgbPalette[id] = new Array(pixelColor[0],pixelColor[1],pixelColor[2]);
+					console.log(rgbPalette[id]);
+				}
+			},50);
+		};
+		reader.readAsDataURL(e.target.files[0]);	
+	}
+	
+	//build the Pico 8 color palette
+	rgbPalette[0] = new Array(0,0,0);//black
+	rgbPalette[1] = new Array(29,43,83);//drak blue
+	rgbPalette[2] = new Array(126,37,83);//dark purple
+	rgbPalette[3] = new Array(0,135,81);//dark green
+	rgbPalette[4] = new Array(171,82,54);//brown
+	rgbPalette[5] = new Array(95,87,79);//drak gray
+	rgbPalette[6] = new Array(194,195,199);//light gray
+	rgbPalette[7] = new Array(255,241,232);//white
+	rgbPalette[8] = new Array(255,0,77);//red
+	rgbPalette[9] = new Array(255,163,0);//orange
+	rgbPalette[10] = new Array(255,240,36);//yellow
+	rgbPalette[11] = new Array(0,228,86);//green
+	rgbPalette[12] = new Array(41,173,255);//blue
+	rgbPalette[13] = new Array(131,118,156);//indigo
+	rgbPalette[14] = new Array(255,119,168);//pink
+	rgbPalette[15] = new Array(255,204,170);//peach
+		
+		var droppedImages = new Array();
+		var filename = new Array();
+		var filecount = 0;
+		var filesLoaded = 0;
+		
+		var imagefiles = document.getElementById('imagefiles'); // the input element of type file
+			imagefiles.onchange = function(e) {
+				filesLoaded = 0;
+				console.log(e.target.files);
+				droppedImages = new Array();
+				filename = new Array();
+				var input, file, fr;  	
+				var file_list = e.target.files;
+				filecount = file_list.length;
+				for(var i=0;i<file_list.length;i++){
+					file = file_list[i];
+					fr = new FileReader();
+					fr.onloadend = (function(file){
+					 return function(e){
+						receivedImage(e,file);
+					 }
+					})(file_list[i]);
+					fr.readAsDataURL(file);
+				}				
+				function receivedImage(e,file) {
+					var droppedImage = new Image();
+					droppedImage.src = e.target.result;
+					console.log(e);
+					console.log(file);
+					
+					var t = droppedImages.length;					
+					droppedImages[t] = droppedImage;
+					filename[t] = file.name.substring(0,file.name.indexOf("."));					
+					filesLoaded++;
+					
+					if(filecount==filesLoaded){
+						UpdateImageOutput();
+					}
+				}
+			}
+			
+	var indexed_mode=0;
+	
+	function UpdateImageOutput(){
+		//initialize ColorPalette if we are using indexed images
+		if(device==0 || device==1){
+			format=2;//Meta and pokitto are 16 color indexed always
+			colors=16;
+		}else if(device==3 || device==4 || device==6 || device==7){
+            //arduboy and thumby are black and white
+			format=8;
+			colors=2;
+		}
+		if(format<=1){
+			indexed_mode=0;
+		}else{
+			indexed_mode=1;
+		}
+		colorPalette = new Array();
+		if(!customPalette){
+			//format 0 and 1 have no palette
+			rgbPalette = new Array();
+			if(format==2){
+				colors = 16;
+				rgbPalette[0] = new Array(0,0,0);//black
+				rgbPalette[1] = new Array(29,43,83);//drak blue
+				rgbPalette[2] = new Array(126,37,83);//dark purple
+				rgbPalette[3] = new Array(0,135,81);//dark green
+				rgbPalette[4] = new Array(171,82,54);//brown
+				rgbPalette[5] = new Array(95,87,79);//drak gray
+				rgbPalette[6] = new Array(194,195,199);//light gray
+				rgbPalette[7] = new Array(255,241,232);//white
+				rgbPalette[8] = new Array(255,0,77);//red
+				rgbPalette[9] = new Array(255,163,0);//orange
+				rgbPalette[10] = new Array(255,240,36);//yellow
+				rgbPalette[11] = new Array(0,228,86);//green
+				rgbPalette[12] = new Array(41,173,255);//blue
+				rgbPalette[13] = new Array(131,118,156);//indigo
+				rgbPalette[14] = new Array(255,119,168);//pink
+				rgbPalette[15] = new Array(255,204,170);//peach	
+				if(device==2 && format==2){//tiny/pocket
+					rgbPalette[1] = new Array(21,32,63);//drak blue
+					rgbPalette[2] = new Array(84,26,56);//dark purple	
+				}						
+				for(var i=0;i<16;i++){
+					colorPalette[i]=(((rgbPalette[i][0]>>3)<<11|(rgbPalette[i][1]>>2)<<5|(rgbPalette[i][2]>>3))); // color	0x0
+					console.log(colorPalette[i],colorPalette[i].toString(16));
+				}
+			}else if(format==4){//4 color palette gray scale
+				colors = 4;
+				rgbPalette[0] = new Array(0,0,0);//black
+				rgbPalette[1] = new Array(86,86,86);//dark gray
+				rgbPalette[2] = new Array(172,172,172);//light gray
+				rgbPalette[3] = new Array(255,255,255);//white							
+				for(var i=0;i<4;i++){
+					colorPalette[i]=(((rgbPalette[i][0]>>3)<<11|(rgbPalette[i][1]>>2)<<5|(rgbPalette[i][2]>>3))); // color	0x0
+					console.log(colorPalette[i],colorPalette[i].toString(16));
+				}
+			}else if(format==8){//2 color palette Black/White
+				colors = 2;
+				rgbPalette[0] = new Array(0,0,0);//black
+				rgbPalette[1] = new Array(255,255,255);//white									
+				console.log(rgbPalette);
+				for(var i=0;i<2;i++){
+					colorPalette[i]=(((rgbPalette[i][0]>>3)<<11|(rgbPalette[i][1]>>2)<<5|(rgbPalette[i][2]>>3))); // color	0x0
+					console.log(colorPalette[i],colorPalette[i].toString(16));
+				}
+			}
+		}
+		
+		//initial output text block
+		if(device==0){//Meta
+			comboString = "const Color PALETTE[] = {\n";					
+			for(var i=0; i<colors; i++){
+				var digitSpriteStr = colorPalette[i].toString(16);
+				while(digitSpriteStr.length<4){
+					digitSpriteStr = "0" + digitSpriteStr;
+				}
+				comboString += "(Color)0x" + digitSpriteStr + ", //color "+i+"\n";
+			}
+			comboString += "};\n\n";
+		}else if(device==1){//pokitto
+			comboString = "const uint16_t PALETTE[] = {\n";
+			for(var i=0; i<colors; i++){
+				comboString += "" + colorPalette[i] + ", //color "+i+"\n";
+			}
+			comboString += "};\n\n";
+		}else if(device==2){//tiny/pocket arcade
+			comboString = "unsigned short PALETTE[] = {\n";
+			for(var i=0; i<colors; i++){
+				comboString += "COLOR16(" + rgbPalette[i][0] + "," + rgbPalette[i][1] + "," + rgbPalette[i][2] + "), //color "+i+"\n";
+			}
+			comboString += "};\n\n";
+		}else if(device==5){//pocketstar
+			comboString = "unsigned short PALETTE[] = {\n";
+			for(var i=0; i<colors; i++){
+				comboString += "COLOR8(" + rgbPalette[i][0] + "," + rgbPalette[i][1] + "," + rgbPalette[i][2] + "), //color "+i+"\n";
+			}
+			comboString += "};\n\n";
+		}else if(device==3 || device==4){//arduboy
+			comboString = "";
+		}else if(device==6 || device==7){//thumby
+			comboString = "";
+		}
+		
+		for(var imid=0; imid<droppedImages.length; imid++){
+			var droppedImage = droppedImages[imid];
+			var origWidth = parseInt(filename[imid].split('-')[1].split('x')[0]);
+			var origHeight = parseInt(filename[imid].split('-')[1].split('x')[1]);
+			var transparentIndex = parseInt(filename[imid].split('-')[1].split('x')[2]);	
+			if(isNaN(parseFloat(transparentIndex))){
+				transparentIndex=0;
+			}			
+			if(device!=3 && device!=4 && device !=6 && device !=7){//not arduboy or thumby
+				if(origWidth%format!=0){//width must be multiples of format
+					alert("bad image width "+filename[imid]);
+				}	
+			}else{//arduboy / thumby
+				if(origHeight%8!=0){//height must be multiples 8
+					alert("bad image height "+filename[imid]);
+				}
+			}
+			var imgNW = droppedImage.naturalWidth;
+			var imgNH = droppedImage.naturalHeight;
+			var zoom = 1;
+			console.log(imgNW);
+			console.log(imgNH);
+					
+			// Create canvas for tiles
+			var droppedImageCanvas = document.createElement("canvas");
+			droppedImageCanvas.width = origWidth*zoom;
+			droppedImageCanvas.height = origHeight*zoom;
+			droppedImageCanvas.style.display = "none";
+
+			// Create invisible canvas for original image
+			var invisImageCanvas = document.createElement("canvas");
+			invisImageCanvas.width = imgNW;
+			invisImageCanvas.height = imgNH;
+			invisImageCanvas.style.display = "none";
+
+			// Create code container		
+			var droppedComboCode = document.createElement("textarea");
+			droppedComboCode.className = "code";
+			droppedComboCode.rows = "50";
+
+			// Create div container
+			var droppedImageDiv = document.createElement("div");
+			droppedImageDiv.className = "image-view";
+			droppedImageDiv.appendChild(droppedImageCanvas);
+			droppedImageDiv.appendChild(invisImageCanvas);
+			
+			var imageContainer = document.getElementById("image-container");
+			imageContainer.innerHTML = "";		
+			imageContainer.appendChild(droppedComboCode);
+
+			// Create context for drawing
+			var droppedImageContext = droppedImageCanvas.getContext("2d");
+			droppedImageContext.imageSmoothingEnabled = false;
+			var invisImageContext = invisImageCanvas.getContext("2d");
+
+			// Draw the image on an invisible canvas to generate the code
+			invisImageContext.drawImage(droppedImage, 0, 0);
+
+
+		    	
+
+
+
+			// Generate the sprite string
+			if(device==3 || device==4 || device==6 || device==7){//arduboy and thumby
+				var pageCount = Math.ceil(imgNH / 8);
+				var columnCount = imgNW;				
+				var bytesPerFrame = origWidth*origHeight/8;
+				var totalFrames = imgNH/origHeight;
+			}else{//others
+				if(format>0){
+					var columnCount = imgNW/format;//if indexed then the width will be divided by 1,2,4,8
+					var totalFrames = imgNH/origHeight;
+					var bytesPerFrame = (origWidth*origHeight)/format;		
+				}else{
+					var columnCount = imgNW;//if indexed then the width will be divided by 1,2,4,8
+					var totalFrames = imgNH/origHeight;
+					var bytesPerFrame = (origWidth*origHeight)*2;	
+				}
+			}
+			var currentByte = 0;
+			var currentMaskByte = 0;
+			var frameCounter = 0;
+			var maskFrameCounter = 0;			
+			
+					
+		    		
+					
+			if(device==0){//meta
+				comboString += "\nconst uint8_t "+filename[imid].split('-')[0]+"_IMAGE_DATA[] = {\n"+
+				origWidth+",// frame width\n"+
+				origHeight+",// frame height\n";		    		
+				comboString += (totalFrames & 0xFF)+",// FRAMES\n";
+				comboString += (totalFrames>>8)+",// FRAMES\n";
+				comboString += "0,// animation speed\n";
+				comboString += transparentIndex+",// transparent color index\n";
+				comboString += indexed_mode+",// indexed mode\n";
+			}else if(device==1){//pokitto
+				//not sure what a color palette looks like since i am choosing pico8 built into the library
+				comboString += "\nconst uint8_t "+filename[imid].split('-')[0]+"[]["+(bytesPerFrame+2)+"] = {\n";
+			}else if(device==2 || device==5){//tiny/pocket arcade pocketstar
+				comboString += "\nconst uint8_t "+filename[imid].split('-')[0]+"[] = {\n"+
+				origWidth+",// frame width\n"+
+				origHeight+",// frame height\n";		    		
+				comboString += (totalFrames & 0xFF)+",// FRAMES\n";
+				comboString += (totalFrames>>8)+",// FRAMES\n";
+				comboString += "0,// animation speed\n";
+				comboString += transparentIndex+",// transparent color index\n";
+				comboString += indexed_mode+",// indexed mode\n";
+			}else if(device==3){//arduboy
+				comboString += "const unsigned char PROGMEM "+filename[imid].split('-')[0]+"_plus_mask[] =\n"+
+				"{\n// width, height,\n"+origWidth+", "+origHeight+",\n";
+			}else if(device==4){//arduboy
+				comboString += "const unsigned char PROGMEM "+filename[imid].split('-')[0]+"[] =\n"+
+				"{\n// width, height,\n"+origWidth+", "+origHeight+",\n";
+			}else if(device==6){//thumby transparent
+				comboString += ""+filename[imid].split('-')[0]+"_plus_mask = (# width, height "+origWidth+", "+origHeight+"\n";
+			}else if(device==7){//thumby B&W
+				comboString += ""+filename[imid].split('-')[0]+" = (# width, height "+origWidth+", "+origHeight+"\n";
+			}
+			
+					
+			// sprite data
+			if(device==1){//pokitto
+				comboString += "// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n{\n"+origWidth+",// frame width\n"+origHeight+",// frame height\n";	
+			}else if(device==0 || device==2 || device==3 || device==5){//Meta, Tiny, Star, Arduboy
+				comboString += "// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n";
+			}
+			
+			if(device==2 || device==5){//tiny arcade/pocket arcade, pocketstar
+				for(var row = 0; row < imgNH; row++) {
+					//for each row
+					for(var column = 0; column < columnCount; column++) {
+						//for each column (pixels per column)
+						var pixelIndex = new Array();
+						for(var id=0; id<format; id++){//for each pixel in byte - 1,2,4,8
+							pixelIndex[id] = 0;
+							var pixelColor_16bit = 0;
+							var pixelColor = invisImageContext.getImageData(column*format+id, row, 1, 1).data;
+							pixelColor_16bit = ((pixelColor[0]>>3)<<11|(pixelColor[1]>>2)<<5|(pixelColor[2]>>3))///RGB-565
+							var min_diff = 65535;
+							pixelIndex[id] |= ( colorPalette.indexOf(pixelColor_16bit) );
+							if(pixelIndex[id]==-1){//unknown color must find closest match
+								min_index=0;
+								for(var i=0;i<16;i++){
+									var diff = Math.abs(pixelColor[2]-rgbPalette[i][2]) + Math.abs(pixelColor[1]-rgbPalette[i][1]) + Math.abs(pixelColor[0]-rgbPalette[i][0]);
+									//console.log(diff);
+									if(diff<min_diff){
+										min_diff = diff;
+										min_index = i;
+									}
+								}
+								pixelIndex[id] = min_index;
+							}
+							//console.log(id,pixelIndex[id]);
+						}
+						//combine pixels into a byte
+						if(format==2){
+							var pixelByte = (pixelIndex[0]<<4)+pixelIndex[1];
+						}else if(format==4){
+							var pixelByte = (pixelIndex[0]<<6)+(pixelIndex[1]<<4)+(pixelIndex[2]<<2)+pixelIndex[3];
+						}else if(format==8){
+							var pixelByte = (pixelIndex[0]<<7)+(pixelIndex[1]<<6)+(pixelIndex[2]<<5)+(pixelIndex[3]<<4)+(pixelIndex[4]<<3)+(pixelIndex[5]<<2)+(pixelIndex[6]<<1)+pixelIndex[7];
+						}
+						
+						if(device==0 || device==2 || device==5){							
+							var hexpixelByte = pixelByte.toString(16);
+							if(hexpixelByte.length == 1) {
+								hexpixelByte = "0" + hexpixelByte;
+							}
+							comboString += "0x" + hexpixelByte + ", ";
+						}else if(device==1){
+							comboString += pixelByte + ", ";
+						}
+						
+						//is end of frame
+						if(currentByte%bytesPerFrame === bytesPerFrame - 1 && row < (imgNH-1)){//next frame
+						console.log(row,imgNH);
+							frameCounter++;
+							if(device==1){
+								comboString += "\n},\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n{\n"+origWidth+",// frame width\n"+origHeight+",// frame height";	
+							}else if(device==0 || device==2 || device==5){
+								comboString += "\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"";
+							}
+							currentByte = 0;
+						}
+						else if(currentByte%bytesPerFrame === bytesPerFrame - 1 ){//end of data
+							if(device==1){
+								comboString += "\n}\n";	
+							}
+						}else{
+							currentByte++;
+						}
+					}					
+					
+					comboString += "\n";
+				}
+			}else if(device==0 || device==1){//Meta, Pokitto are always Indexed 16 color
+				for(var row = 0; row < imgNH; row++) {
+					//for each row
+					for(var column = 0; column < columnCount; column++) {
+						//for each column (pixels per column)
+						var pixelIndex = new Array();
+						for(var id=0; id<format; id++){//for each pixel in byte - 1,2,4,8
+							pixelIndex[id] = 0;
+							var pixelColor_16bit = 0;
+							var pixelColor = invisImageContext.getImageData(column*format+id, row, 1, 1).data;
+							pixelColor_16bit = ((pixelColor[0]>>3)<<11|(pixelColor[1]>>2)<<5|(pixelColor[2]>>3))///RGB-565
+							var min_diff = 65535;
+							pixelIndex[id] |= ( colorPalette.indexOf(pixelColor_16bit) );
+							if(pixelIndex[id]==-1){//unknown color must find closest match
+								min_index=0;
+								for(var i=0;i<16;i++){
+									var diff = Math.abs(pixelColor[2]-rgbPalette[i][2]) + Math.abs(pixelColor[1]-rgbPalette[i][1]) + Math.abs(pixelColor[0]-rgbPalette[i][0]);
+									//console.log(diff);
+									if(diff<min_diff){
+										min_diff = diff;
+										min_index = i;
+									}
+								}
+								pixelIndex[id] = min_index;
+							}
+							//console.log(id,pixelIndex[id]);
+						}
+						//combine pixels into a byte
+						if(format==2){
+							var pixelByte = (pixelIndex[0]<<4)+pixelIndex[1];
+						}else if(format==4){
+							var pixelByte = (pixelIndex[0]<<6)+(pixelIndex[1]<<4)+(pixelIndex[2]<<2)+pixelIndex[3];
+						}else if(format==8){
+							var pixelByte = (pixelIndex[0]<<7)+(pixelIndex[1]<<6)+(pixelIndex[2]<<5)+(pixelIndex[3]<<4)+(pixelIndex[4]<<3)+(pixelIndex[5]<<2)+(pixelIndex[6]<<1)+pixelIndex[7];
+						}
+						
+						if(device==0 || device==2 || device==5){							
+							var hexpixelByte = pixelByte.toString(16);
+							if(hexpixelByte.length == 1) {
+								hexpixelByte = "0" + hexpixelByte;
+							}
+							comboString += "0x" + hexpixelByte + ", ";
+						}else if(device==1){
+							comboString += pixelByte + ", ";
+						}
+						
+						//is end of frame
+						if(currentByte%bytesPerFrame === bytesPerFrame - 1 && row < (imgNH-1)){//next frame
+						console.log(row,imgNH);
+							frameCounter++;
+							if(device==1){
+								comboString += "\n},\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n{\n"+origWidth+",// frame width\n"+origHeight+",// frame height";	
+							}else if(device==0 || device==2 || device==5){
+								comboString += "\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"";
+							}
+							currentByte = 0;
+						}
+						else if(currentByte%bytesPerFrame === bytesPerFrame - 1 ){//end of data
+							if(device==1){
+								comboString += "\n}\n";	
+							}
+						}else{
+							currentByte++;
+						}
+					}					
+					
+					comboString += "\n";
+				}
+			
+				for(var row = 0; row < imgNH; row++) {
+					//for each row
+					for(var column = 0; column < columnCount; column++) {
+						//for each column (pixels per column)
+						var pixelIndex = new Array();
+						for(var id=0; id<format; id++){//for each pixel in byte - 1,2,4,8
+							pixelIndex[id] = 0;
+							var pixelColor_16bit = 0;
+							var pixelColor = invisImageContext.getImageData(column*format+id, row, 1, 1).data;
+							pixelColor_16bit = ((pixelColor[0]>>3)<<11|(pixelColor[1]>>2)<<5|(pixelColor[2]>>3))///RGB-565
+							var min_diff = 65535;
+							pixelIndex[id] |= ( colorPalette.indexOf(pixelColor_16bit) );
+							if(pixelIndex[id]==-1){//unknown color must find closest match
+								min_index=0;
+								for(var i=0;i<16;i++){
+									var diff = Math.abs(pixelColor[2]-rgbPalette[i][2]) + Math.abs(pixelColor[1]-rgbPalette[i][1]) + Math.abs(pixelColor[0]-rgbPalette[i][0]);
+									//console.log(diff);
+									if(diff<min_diff){
+										min_diff = diff;
+										min_index = i;
+									}
+								}
+								pixelIndex[id] = min_index;
+							}
+							//console.log(id,pixelIndex[id]);
+						}
+						//combine pixels into a byte
+						if(format==2){
+							var pixelByte = (pixelIndex[0]<<4)+pixelIndex[1];
+						}else if(format==4){
+							var pixelByte = (pixelIndex[0]<<6)+(pixelIndex[1]<<4)+(pixelIndex[2]<<2)+pixelIndex[3];
+						}else if(format==8){
+							var pixelByte = (pixelIndex[0]<<7)+(pixelIndex[1]<<6)+(pixelIndex[2]<<5)+(pixelIndex[3]<<4)+(pixelIndex[4]<<3)+(pixelIndex[5]<<2)+(pixelIndex[6]<<1)+pixelIndex[7];
+						}
+						
+						if(device==0 || device==2 || device==5){							
+							var hexpixelByte = pixelByte.toString(16);
+							if(hexpixelByte.length == 1) {
+								hexpixelByte = "0" + hexpixelByte;
+							}
+							comboString += "0x" + hexpixelByte + ", ";
+						}else if(device==1){
+							comboString += pixelByte + ", ";
+						}
+						
+						//is end of frame
+						if(currentByte%bytesPerFrame === bytesPerFrame - 1 && row < (imgNH-1)){//next frame
+						console.log(row,imgNH);
+							frameCounter++;
+							if(device==1){
+								comboString += "\n},\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n{\n"+origWidth+",// frame width\n"+origHeight+",// frame height";	
+							}else if(device==0 || device==2 || device==5){
+								comboString += "\n// FRAME "+(frameCounter+1)+"/"+totalFrames+"";
+							}
+							currentByte = 0;
+						}
+						else if(currentByte%bytesPerFrame === bytesPerFrame - 1 ){//end of data
+							if(device==1){
+								comboString += "\n}\n";	
+							}
+						}else{
+							currentByte++;
+						}
+					}					
+					
+					comboString += "\n";
+				}
+			}else if(device==3 || device == 4){//arduboy B&W, arduboy transparent
+                for(var page = 0; page < pageCount; page++) {
+					// Read the page column-by-column
+					for(var column = 0; column < columnCount; column++) {
+
+						// Read the column into a byte
+						var spriteByte = 0;
+						var maskByte = 0;
+						for(var yPixel = 0; yPixel < 8; yPixel++) {
+
+							// If the color of the pixel is not black, count it as white
+							var pixelColor = invisImageContext.getImageData(column, page*8 + yPixel, 1, 1).data;
+							if(pixelColor[0] > 0 || pixelColor[1] > 0 || pixelColor[2] > 0) {
+								spriteByte |= (1 << yPixel);
+							}
+							if(pixelColor[3] > 0) {
+								maskByte |= (1 << yPixel);
+							}
+						}
+						
+						// Print the column in hex notation, add a comma for formatting
+						var digitSpriteStr = spriteByte.toString(16);
+						var digitMaskStr = maskByte.toString(16);
+						if(digitSpriteStr.length == 1) {
+							digitSpriteStr = "0" + digitSpriteStr;
+						}
+						if(digitMaskStr.length == 1) {
+							digitMaskStr = "0" + digitMaskStr;
+						}
+						comboString += "0x" + digitSpriteStr + ", ";
+						if(device==3){//arduboy						
+							if(imgNW%2===0){
+								comboString += "0x" + digitMaskStr + ", ";
+								if(currentByte%imgNW == imgNW - 1){
+									comboString += "\n";
+								}
+							}
+						}
+						if(currentByte%imgNW == Math.ceil(imgNW/2)-1){
+							comboString += "\n";
+						}
+						if(device==3){//arduboy						
+							if(imgNW%2===1){
+								comboString += "0x" + digitMaskStr + ", ";
+								if(currentByte%imgNW == imgNW - 1){
+									comboString += "\n";
+								}
+							}
+						}
+						if(currentByte%bytesPerFrame === bytesPerFrame - 1 && frameCounter < imgNH/origHeight -1){
+							if(currentByte%imgNW !== Math.ceil(imgNW/2)-1){
+								comboString += "\n";
+							}
+							frameCounter++;
+							var frameNumber = frameCounter.toString().length === 1 ? "0"+frameCounter.toString() : frameCounter.toString();
+							if(device==7){
+                                comboString += "),\n(// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n";
+							}else{
+                                comboString += "// FRAME "+(frameCounter+1)+"/"+totalFrames+"\n";
+							}
+							currentByte = 0;
+						}
+						else{
+							currentByte++;
+						}
+					}
+				}
+			}else{//thumby transparent, thumby B&W
+				if(device==7 && totalFrames>1){
+					comboString+="invalid images, thumby black & white images can not have frames";
+				}else{
+					frameCounter=0;
+					combo_frame = new Array();
+					combo_frame[0] = "";
+					if(totalFrames>1 || device==6){
+						combo_frame[0] += "(";
+					}
+					if(device==6){//thumby image plus mask
+						for(var page = 0; page < pageCount; page++) {
+							// Read the page column-by-column for black pixels first
+							for(var column = 0; column < columnCount; column++) {
+
+								// Read the column into a byte
+								var spriteByte = 0;
+								for(var yPixel = 0; yPixel < 8; yPixel++) {
+
+									// If the color of the pixel is not black, count it as white
+									var pixelColor = invisImageContext.getImageData(column, page*8 + yPixel, 1, 1).data;
+									if(pixelColor[0] > 0 || pixelColor[1] > 0 || pixelColor[2] > 0) {
+										spriteByte |= (1 << yPixel);
+									}
+									if(pixelColor[3] < 255) {
+										spriteByte |= (1 << yPixel);
+									}
+								}
+								
+								// Print the column in hex notation, add a comma for formatting
+								var digitSpriteStr = spriteByte.toString(16);
+								if(digitSpriteStr.length == 1) {
+									digitSpriteStr = "0" + digitSpriteStr;
+								}
+								combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
+								if(currentByte%imgNW == Math.ceil(imgNW/2)-1){
+									combo_frame[frameCounter] += "\n";
+								}
+								if(currentByte%bytesPerFrame === bytesPerFrame - 1 && frameCounter < imgNH/origHeight -1){
+									if(currentByte%imgNW !== Math.ceil(imgNW/2)-1){
+										combo_frame[frameCounter] += "\n";
+									}
+									frameCounter++;
+									combo_frame[frameCounter] = "";
+									var frameNumber = frameCounter.toString().length === 1 ? "0"+frameCounter.toString() : frameCounter.toString();
+									combo_frame[frameCounter] += "),\n(# FRAME "+(frameCounter+1)+"/"+totalFrames+"\n";
+									currentByte = 0;
+								}
+								else{
+									currentByte++;
+								}
+							}
+						}
+						currentByte=0;
+						frameCounter=0;
+						combo_frame[frameCounter] += "),\n(";
+					}
+					for(var page = 0; page < pageCount; page++) {
+						if(combo_frame[frameCounter] == 'undefined'){
+							combo_frame[frameCounter] = "";
+						}
+						// Read the page column-by-column for white pixels first
+						for(var column = 0; column < columnCount; column++) {
+
+							// Read the column into a byte
+							var spriteByte = 0;
+							for(var yPixel = 0; yPixel < 8; yPixel++) {
+
+								// If the color of the pixel is not white, count it as black
+								var pixelColor = invisImageContext.getImageData(column, page*8 + yPixel, 1, 1).data;
+
+								if(pixelColor[0] > 0 || pixelColor[1] > 0 || pixelColor[2] > 0) {
+									spriteByte |= (1 << yPixel);
+								}
+							}
+							
+							// Print the column in hex notation, add a comma for formatting
+							var digitSpriteStr = spriteByte.toString(16);
+							if(digitSpriteStr.length == 1) {
+								digitSpriteStr = "0" + digitSpriteStr;
+							}
+							combo_frame[frameCounter] += "0x" + digitSpriteStr + ", ";
+							if(currentByte%imgNW == Math.ceil(imgNW/2)-1){
+								combo_frame[frameCounter] += "\n";
+							}
+							if(currentByte%bytesPerFrame === bytesPerFrame - 1 && frameCounter < imgNH/origHeight -1){
+								if(currentByte%imgNW !== Math.ceil(imgNW/2)-1){
+									combo_frame[frameCounter] += "\n";
+								}
+								frameCounter++;
+								if(combo_frame[frameCounter] == 'undefined'){
+									combo_frame[frameCounter] = "";
+								}
+								var frameNumber = frameCounter.toString().length === 1 ? "0"+frameCounter.toString() : frameCounter.toString();
+								combo_frame[frameCounter] += "),\n(# FRAME "+(frameCounter+1)+"/"+totalFrames+"\n";
+								currentByte = 0;
+							}
+							else{
+								currentByte++;
+							}
+						}
+					}
+					if(totalFrames>1 || device==6){
+						combo_frame[frameCounter] += ")";
+					} 
+					for(i=0;i<combo_frame.length;i++){
+						comboString+=combo_frame[i];
+						console.log(combo_frame[i]);
+					}
+				}
+			}
+			
+			if(device==6 || device==7){//thumby
+                comboString = comboString.replace(/\s*$/, "\n)");
+			}else{
+                comboString = comboString.replace(/\s*$/, "\n};");
+			}
+			if(device==0){
+				comboString += "\nImage "+filename[imid].split('-')[0]+" = Image("+filename[imid].split('-')[0]+"_IMAGE_DATA);";
+			}else if(device==3){
+				comboString+="\n";
+			}
+		    						
+		}		
+
+		// Put the code in the text field
+		droppedComboCode.innerHTML = comboString;		
+	}	
+	
+	
+
+
+
+</script>
+</body>
+</html>

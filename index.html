@@ -755,7 +755,7 @@
 						combo_frame[frameCounter] += "),\n(";
 					}
 					for(var page = 0; page < pageCount; page++) {
-						if(len(combo_frame[frameCounter]) == 0){
+						if(combo_frame[frameCounter].length == 0){
 							combo_frame[frameCounter] = "";
 						}
 						// Read the page column-by-column for white pixels first
@@ -787,7 +787,7 @@
 									combo_frame[frameCounter] += "\n";
 								}
 								frameCounter++;
-								if(len(combo_frame[frameCounter]) == 0){
+								if(combo_frame[frameCounter].length == 0){
 									combo_frame[frameCounter] = "";
 								}
 								var frameNumber = frameCounter.toString().length === 1 ? "0"+frameCounter.toString() : frameCounter.toString();

@@ -4,8 +4,6 @@
 <head>
 	<title>Mass Image Converter</title>
 	<meta name="viewport" content="width=750" />
-	<link rel="stylesheet" type="text/css" href="css/textstyles.css" />
-	<link rel="stylesheet" type="text/css" href="css/pagestyle.css?3.568126e+9" />
 	<script type="text/javascript" src="imageCode.js"></script>
 	<script type="text/javascript" src="LZWEncoder.js"></script>
 	<script type="text/javascript" src="NeuQuant.js"></script>
@@ -46,8 +44,10 @@
 	<input type="radio" name="device" id="device" value="5"> PocketStar<br>
 	<input type="radio" name="device" id="device" value="3"> Arduboy Black/White/Transparent only<br>
 	<input type="radio" name="device" id="device" value="4"> Arduboy Black/White only<br>
-	<input type="radio" name="device" id="device" value="6"> Thumby Black/White/Transparent (drawMaskedSprite)<br>
-	<input type="radio" name="device" id="device" value="7"> Thumby Black/White (drawSprite)<br>
+	<input type="radio" name="device" id="device" value="6"> Thumby Masked Sprite (drawSprite)<br>
+	<input type="radio" name="device" id="device" value="7"> Thumby Unmasked Sprite (drawSprite)<br>
+	<input type="radio" name="device" id="device" value="8"> Thumby Masked Binary Sprite Data (ImageFile)<br>
+	<input type="radio" name="device" id="device" value="9"> Thumby Unmasked Binary Sprite Data (ImageFile)<br>
 	Palette:<input type='file' id='palettefile'> Default:Pico 8 Palette<br>
 	Format:
 	<input type="radio" name="format" id="format" value="0"> 2 Bytes per Pixel (65536 colors)

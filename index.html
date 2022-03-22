@@ -704,7 +704,7 @@
 					frameCounter=0;
 					combo_frame = new Array();
 					combo_frame[0] = "";
-					if(totalFrames>1 || device==6){
+					if(totalFrames>1){
 						combo_frame[0] += "(";
 					}
 					if(device==6){//thumby image plus mask
@@ -799,7 +799,7 @@
 							}
 						}
 					}
-					if(totalFrames>1 || device==6){
+					if(totalFrames>1){
 						combo_frame[frameCounter] += ")";
 					} 
 					for(i=0;i<combo_frame.length;i++){
